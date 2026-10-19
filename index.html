@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>名護動植物園地圖</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+/* 一張滿版地圖＋底部可拉的行程表 */
+:root{--bg:#f6f4ef;--fg:#1f2a24;--muted:#5d6b62;--card:#ffffff;--line:#d9d4c8;--accent:#c2410c;--zoo:#3f7d3a;--west:#9a3412;--arab:#7c3aed;--south:#0e7490;--me:#2563eb}
+@media (prefers-color-scheme:dark){:root{--bg:#141815;--fg:#e8ece6;--muted:#9fb0a4;--card:#1d231f;--line:#334036;--accent:#fb923c;color-scheme:dark}}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 "Noto Sans TC",system-ui,-apple-system,"PingFang TC",sans-serif;display:flex;flex-direction:column}
+#map{flex:1 1 55%;min-height:300px}
+#panel{flex:1 1 45%;overflow:auto;padding:12px 16px calc(16px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}
+h1{font-size:18px;margin:0 0 4px;text-wrap:balance}
+.sub{color:var(--muted);font-size:13px;margin:0 0 10px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:999px;padding:6px 12px;cursor:pointer}
+button.on{background:var(--me);border-color:var(--me);color:#fff}
+#gps{font-size:13px;color:var(--muted);margin:0 0 10px}
+ol{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+li{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;grid-template-columns:58px 1fr;gap:4px 10px;cursor:pointer}
+li .t{font-weight:700;font-variant-numeric:tabular-nums}
+li .n{font-weight:700}
+li .d{grid-column:2;color:var(--muted);font-size:13px}
+li .w{grid-column:2;font-size:13px;color:var(--accent);font-variant-numeric:tabular-nums}
+li.warn .d{color:var(--accent)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:1px}
+.note{font-size:12px;color:var(--muted);margin-top:12px}
+.pin{width:26px;height:26px;border-radius:50%;color:#fff;font:700 13px/26px system-ui;text-align:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.fac{font-size:16px;line-height:20px;text-align:center}
+.search{position:relative;margin:0 0 10px}
+#q{width:100%;box-sizing:border-box;font:inherit;font-size:16px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--fg)}
+#q:focus{outline:2px solid var(--me);outline-offset:1px}
+#res{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px}
+#res li{display:flex;justify-content:space-between;gap:10px;padding:8px 12px;grid-template-columns:none;border-radius:8px}
+#res li .c{color:var(--muted);font-size:13px;white-space:nowrap;font-variant-numeric:tabular-nums}
+#res .none{color:var(--muted);font-size:13px;cursor:default}
+.hit{width:30px;height:30px;border-radius:50%;background:#2563eb;color:#fff;font:700 15px/30px system-ui;text-align:center;border:3px solid #fff;box-shadow:0 0 0 3px #2563eb,0 2px 6px rgba(0,0,0,.4)}
+
+.tabs{display:flex;gap:6px;margin:0 0 10px}
+#guide{display:none;flex:1 1 55%;overflow:auto;background:#fffbe8;-webkit-overflow-scrolling:touch}
+#guide img{width:100%;min-width:720px;display:block}
+body.g #map{display:none} body.g #guide{display:block}
+.box{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0;font-size:14px}
+.box h2{font-size:15px;margin:0 0 6px}
+.box ul{margin:0;padding-left:18px}
+.box td,.box th{padding:3px 6px;text-align:left;font-variant-numeric:tabular-nums;border-bottom:1px solid var(--line)}
+.box table{border-collapse:collapse;width:100%}
+.warnc{color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="guide"><img src="guide_route.jpg" alt="官網最新導覽圖，紅色數字是建議路線"></div>
+<div id="panel">
+  <h1>名護動植物園（Neo Park Okinawa）親子地圖・10/20（二）</h1>
+  <p class="sub">6 大 1 小（2 歲）。建議 9:00 從待遠屋出發（約 22.6 km、35–40 分），9:40 到，12:00 出園，再開約 35 分到古宇利の駅 ソラハシ吃午餐。</p>
+  <div class="tabs"><button id="tMap" class="on">🗺 真實地圖＋定位</button><button id="tGuide">📄 官網導覽圖（紅數字＝路線）</button></div>
+  <div class="bar">
+    <button id="btnGps">📍 開啟我的定位</button>
+    <button id="btnFollow">跟著我移動</button>
+    <button id="btnFac" class="on">🚻 廁所</button>
+    <button id="btnAll">看全部行程</button>
+  </div>
+  <div class="search"><label for="q" class="sub" style="display:block;margin:0 0 4px">搜尋動物、設施、廁所</label>
+    <input id="q" type="search" placeholder="例如：水豚、紅鶴、廁所、小熊貓、火車" autocomplete="off" enterkeyhint="search">
+    <ul id="res"></ul></div>
+  <p id="gps">還沒開啟定位。按「開啟我的定位」，手機問要不要允許時選允許。</p>
+  <ol id="plan"></ol>
+
+  <div class="box"><h2>🎫 票價（官網）</h2><table>
+   <tr><th></th><th>大人（13 歲以上）</th><th>小孩（4–12 歲）</th><th>寶寶（3 歲以下）</th></tr>
+   <tr><td>入園</td><td>¥1,600</td><td>¥800</td><td>免費</td></tr>
+   <tr><td>小火車</td><td>¥1,000（國中以上）</td><td>¥800（4 歲–小學）</td><td>免費</td></tr>
+   <tr><td>觸摸廣場</td><td colspan="2">4 歲以上一律 ¥500（大人進去也要付）</td><td>免費，需大人陪</td></tr></table>
+   <p class="sub" style="margin:6px 0 0">6 大人入園＋小火車約 ¥15,600。線上「入園＋小火車」套票我們網頁之前查到大人 ¥2,500（略便宜），現場買也可以；有預售票也不能優先入園。</p></div>
+
+  <div class="box"><h2>🚂 小火車平日班次（週二）</h2>
+   <p style="margin:0">10:30・11:30・12:30・13:30・14:00・15:00・16:00<br>一圈 1.2 km、約 20 分，沿路看駱馬、草原、鴕鳥。<span class="warnc">官網另一處寫末班 16:45，跟時刻表對不起來；10:00、12:00、13:00 只有週日與旺季開。</span>官網註明火車是遊覽用、不是交通工具（繞一圈回原站）。</p></div>
+
+  <div class="box"><h2>🦅 鳥類表演</h2><p style="margin:0">每天 11:00、14:30。表演中不能進出，提早 10 分到。下雨改成跟鳥合照。<span class="warnc">會場在官網導覽圖右上角（11 號），真實地圖上的位置是我依導覽圖推估的。</span></p></div>
+
+  <div class="box"><h2>👶 帶 2 歲寶寶要知道</h2><ul>
+   <li>很多鳥是放養的，會走到腳邊，寶寶手上不要拿食物。</li>
+   <li>可以餵東西的區域：トートの湖（鳥）、觸摸廣場（專用飼料）、オセアニア、草原的領西貒；亞馬遜叢林區不能餵。</li>
+   <li>亞馬遜區要過暗暗的隧道，上觀景台要走樓梯，推車可能要收（沒查證有無坡道）。</li>
+   <li>傘免費借（數量有限）、輪椅免費借 4 台；可以帶食物進園，但不能在動物展示區吃。</li>
+   <li>廁所：入口 Main House（有無障礙廁所）、園區中間兩處、研究中心。</li>
+   <li>Main House 2 樓的「しましましっぽカフェ」可以邊看小熊貓邊吃東西（9:30–17:30）。小熊貓餵食券在咖啡店買，只收現金，一天 2 場（時間看現場）。</li>
+   <li>園內小吃店「パーラーバオバブ」不定休。</li></ul></div>
+
+  <div class="box"><h2>⏰ 如果 10:00 才出門</h2><p style="margin:0">10:40 到 → 先坐 11:30 小火車前把トートの湖＋亞馬遜逛完 → 11:00 鳥類表演 → 11:30 小火車 → 觸摸廣場 → 12:20 出園，12:55 到ソラハシ。</p></div>
+
+  <p class="note">資料來源：Neo Park Okinawa 官網（園內情報、料金頁，10/19 查）。真實地圖上的導覽圖是舊版手繪圖，我用 OpenStreetMap 的小火車軌道和建築物對位，誤差約 10–20 公尺；官網最新導覽圖是示意圖，比例不準，只看相對位置。開車時間用 OSRM 估算。</p>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// 舊版官網手繪圖（2000×1500）用 OSM 軌道＋建築物對位的範圍
+const BOUNDS=[[26.60984,127.98807],[26.61364,127.99393]];
+const AREA={gate:['入口','var(--accent)','#c2410c'],bird:['鳥','#0e7490','#0e7490'],zoo:['動物','var(--zoo)','#3f7d3a'],train:['火車','#7c3aed','#7c3aed']};
+const PLAN=[
+ {t:'9:40',n:'停車場 → Main House 買票',a:'gate',p:[26.61069,127.99151],d:'入口 Main House：售票、服務台、廁所（含無障礙）。1 樓看沙貓（スナネコ）。先上廁所再出發。'},
+ {t:'9:55',n:'トートの湖（紅鶴＋水鳥）',a:'bird',p:[26.611074,127.991196],d:'一進園就是。網籠裡鳥自由飛，可以買點心餵鳥（價錢看現場）。寶寶最愛。'},
+ {t:'10:10',n:'亞馬遜叢林＋水中隧道',a:'zoo',p:[26.611664,127.991059],d:'9:45 開。巨骨舌魚、紅鶚、貘。隧道暗、觀景台要走樓梯，推車可能要收。這區不能餵食。'},
+ {t:'10:25',n:'小火車站（坐 10:30 班）',a:'train',p:[26.611107,127.991929],d:'一圈 1.2 km 約 20 分，大人 ¥1,000，寶寶免費。沿路看駱馬、領西貒、鴕鳥，西邊和北邊就不用走路去了。'},
+ {t:'10:50',n:'鳥類表演會場（11:00 場）',a:'bird',p:[26.611867,127.992406],d:'老鷹、貓頭鷹、鸚鵡飛過頭頂。表演中不能進出，先上廁所。位置依官網導覽圖推估。',warn:1},
+ {t:'11:25',n:'觸摸廣場（水豚、天竺鼠、山羊、象龜）',a:'zoo',p:[26.611061,127.990326],d:'10:00–17:00。4 歲以上一律 ¥500（大人也算），寶寶免費但要大人陪；建議 1–2 位大人帶寶寶進去，其他人在外面等。有專用飼料。'},
+ {t:'11:50',n:'Main House 2F 小熊貓＋咖啡店',a:'gate',p:[26.61072,127.99165],d:'看小熊貓、買沖繩善哉或飲料，最後上一次廁所。'},
+ {t:'12:00',n:'出園 → 古宇利の駅 ソラハシ',a:'gate',p:[26.6099,127.9923],d:'約 15 km、35 分，12:35 左右到，在午餐尖峰前。寶寶可以在車上午睡。'}
+];
+const FAC={"廁所":"🚻"};
+const FACDATA={"廁所":[[26.61069,127.99151],[26.61228,127.990326],[26.61228,127.991689],[26.61091,127.99222],[26.61272,127.99161]]};
+const POI=[["Main House（入口・售票・沙貓・小熊貓・咖啡店）","入口",26.61069,127.99151],["トートの湖（紅鶴）","餵鳥",26.611074,127.991196],["亞馬遜叢林","動物",26.611664,127.991059],["水中隧道","動物",26.612259,127.991272],["觸摸廣場（水豚）","可摸可餵",26.611061,127.990326],["非洲草原（鴕鳥）","動物",26.61062,127.989093],["パーラーバオバブ（小吃、冰）","吃",26.611773,127.989766],["パンパスの草原（領西貒、駱馬）","動物",26.612918,127.990259],["オセアニア（孔雀、鴯鶓）","餵鳥",26.613017,127.991064],["國際種保存研究中心（免費）","動物",26.61272,127.99161],["小火車站","火車",26.611107,127.991929],["鳥類表演會場（推估）","表演 11:00・14:30",26.611867,127.992406],["自然博物情報館","展館",26.61091,127.99222]].concat(FACDATA["廁所"].map(p=>["廁所","🚻",p[0],p[1]]));
+const map=L.map('map',{zoomControl:true,maxZoom:20}).fitBounds([[26.6102,127.9890],[26.6135,127.9930]]);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,maxNativeZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+L.imageOverlay('park.png',BOUNDS,{opacity:0.92}).addTo(map);
+
+function hav(a,b){const R=6371000,r=Math.PI/180,dl=(b[0]-a[0])*r,dn=(b[1]-a[1])*r;const x=Math.sin(dl/2)**2+Math.cos(a[0]*r)*Math.cos(b[0]*r)*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
+const walk=(a,b)=>{const m=hav(a,b)*1.4;return {m:Math.round(m/10)*10,min:Math.max(1,Math.round(m/50))};};
+
+const line=L.polyline(PLAN.map(s=>s.p),{color:'#c2410c',weight:4,opacity:.7,dashArray:'6 8'}).addTo(map);
+const markers=[];
+PLAN.forEach((s,i)=>{
+  const icon=L.divIcon({className:'',html:`<div class="pin" style="background:${AREA[s.a][2]}">${i+1}</div>`,iconSize:[26,26],iconAnchor:[13,13]});
+  const m=L.marker(s.p,{icon}).addTo(map).bindPopup(`<b>${s.t} ${s.n}</b><br>${s.d}`);
+  markers.push(m);
+});
+const facLayer=L.layerGroup().addTo(map);
+for(const [k,arr] of Object.entries(FACDATA)){ if(!FAC[k])continue;
+  arr.forEach(p=>L.marker(p,{icon:L.divIcon({className:'fac',html:FAC[k],iconSize:[20,20]})}).bindPopup(k).addTo(facLayer)); }
+
+const ol=document.getElementById('plan');
+PLAN.forEach((s,i)=>{
+  const li=document.createElement('li'); if(s.warn) li.className='warn';
+  let w=''; if(i>0){const x=walk(PLAN[i-1].p,s.p); w=`從上一站走約 ${x.m} 公尺，約 ${x.min} 分鐘`;}
+  li.innerHTML=`<span class="t">${s.t}</span><span class="n"><span class="dot" style="background:${AREA[s.a][1]}"></span>${i+1}. ${s.n}</span><span class="d">${s.d}</span>${w?`<span class="w">${w}</span>`:''}<span class="w me" data-i="${i}"></span>`;
+  li.onclick=()=>{map.setView(s.p,19);markers[i].openPopup();};
+  ol.appendChild(li);
+});
+
+let me=null,acc=null,follow=false,watch=null,last=null;
+const gpsEl=document.getElementById('gps');
+function inPark(p){return p[0]>BOUNDS[0][0]&&p[0]<BOUNDS[1][0]&&p[1]>BOUNDS[0][1]&&p[1]<BOUNDS[1][1];}
+function onPos(pos){
+  const p=[pos.coords.latitude,pos.coords.longitude]; last=p;
+  if(!me){me=L.circleMarker(p,{radius:9,color:'#fff',weight:3,fillColor:'#2563eb',fillOpacity:1}).addTo(map);acc=L.circle(p,{radius:pos.coords.accuracy,color:'#2563eb',weight:1,fillOpacity:.12}).addTo(map);map.setView(p,inPark(p)?18:map.getZoom());}
+  me.setLatLng(p);acc.setLatLng(p).setRadius(pos.coords.accuracy);
+  if(follow)map.panTo(p);
+  const t=new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
+  gpsEl.textContent=inPark(p)?`📍 已定位（${t}，誤差約 ${Math.round(pos.coords.accuracy)} 公尺）。每一站下面會顯示從你這裡走過去要多久。`:`📍 已定位，但你還不在動植物園裡（${t}）。進園後藍點會出現在地圖上。`;
+  document.querySelectorAll('.me').forEach(el=>{const s=PLAN[+el.dataset.i];if(!inPark(p)){el.textContent='';return;}const x=walk(p,s.p);el.textContent=`從你現在的位置：約 ${x.m} 公尺，約 ${x.min} 分鐘`;});
+}
+function onErr(e){gpsEl.textContent=e.code===1?'定位被拒絕了。到手機設定→Safari／Chrome→位置，改成允許，再重新整理。':'暫時抓不到定位（'+e.message+'），到空曠處再試一次。';}
+document.getElementById('btnGps').onclick=function(){
+  if(!navigator.geolocation){gpsEl.textContent='這個瀏覽器不支援定位。';return;}
+  if(watch!==null){navigator.geolocation.clearWatch(watch);watch=null;this.classList.remove('on');this.textContent='📍 開啟我的定位';return;}
+  gpsEl.textContent='定位中…';
+  watch=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:5000,timeout:20000});
+  this.classList.add('on');this.textContent='📍 定位中（按一下關閉）';
+};
+document.getElementById('btnFollow').onclick=function(){follow=!follow;this.classList.toggle('on',follow);if(follow&&last)map.panTo(last);};
+document.getElementById('btnFac').onclick=function(){const on=map.hasLayer(facLayer);on?map.removeLayer(facLayer):facLayer.addTo(map);this.classList.toggle('on',!on);};
+document.getElementById('btnAll').onclick=()=>map.fitBounds(line.getBounds().pad(0.15));
+
+// ---- 搜尋（官網 GetMapInfo 全部 139 個點＋行程站）
+const ALIAS={'廁所':'🚻','吃':'吃 咖啡','火車':'小火車','鳥':'餵鳥 表演','水豚':'觸摸','紅鶴':'トート','小熊貓':'Main House','買票':'Main House'};
+const norm=t=>t.toLowerCase().replace(/儸/g,'羅').replace(/\s+/g,'');
+const ALL=POI.map(([n,c,la,ln])=>({n,c,p:[la,ln]}));
+const resEl=document.getElementById('res'),qEl=document.getElementById('q');
+let hitMk=null;
+function show(it){
+  if(hitMk)map.removeLayer(hitMk);
+  hitMk=L.marker(it.p,{icon:L.divIcon({className:'',html:'<div class="hit">★</div>',iconSize:[30,30],iconAnchor:[15,15]}),zIndexOffset:1000}).addTo(map);
+  let w='';if(last&&inPark(last)){const x=walk(last,it.p);w=`<br>從你這裡約 ${x.m} 公尺、${x.min} 分鐘`;}
+  hitMk.bindPopup(`<b>${it.n}</b><br>${it.c}${w}`).openPopup();
+  map.setView(it.p,19);
+  document.getElementById('map').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function search(){
+  const q=norm(qEl.value);resEl.innerHTML='';if(!q)return;
+  const keys=[q];for(const [k,v] of Object.entries(ALIAS)) if(k.includes(q)||q.includes(k)) keys.push(...v.split(' ').map(norm));
+  const seen=new Set(),hits=[];
+  for(const it of ALL){const a=norm(it.n),b=norm(it.c);if(keys.some(k=>a.includes(k)||b.includes(k)||(k.length>1&&k.includes(a)))){const id=it.n+it.p;if(!seen.has(id)){seen.add(id);hits.push(it);}}}
+  if(last&&inPark(last))hits.sort((x,y)=>hav(last,x.p)-hav(last,y.p));
+  if(!hits.length){resEl.innerHTML='<li class="none">找不到。試試別的字，例如設施名稱的其中兩個字。</li>';return;}
+  hits.slice(0,12).forEach(it=>{const li=document.createElement('li');
+    let d=it.c;if(last&&inPark(last)){const x=walk(last,it.p);d=`${it.c}・${x.m} 公尺・${x.min} 分`;}
+    li.innerHTML=`<span>${it.n}</span><span class="c">${d}</span>`;li.onclick=()=>show(it);resEl.appendChild(li);});
+}
+qEl.addEventListener('input',search);
+qEl.addEventListener('keydown',e=>{if(e.key==='Enter'){const f=resEl.querySelector('li:not(.none)');if(f){f.click();qEl.blur();}}});
+
+document.getElementById('tMap').onclick=function(){document.body.classList.remove('g');this.classList.add('on');document.getElementById('tGuide').classList.remove('on');setTimeout(()=>map.invalidateSize(),50);};
+document.getElementById('tGuide').onclick=function(){document.body.classList.add('g');this.classList.add('on');document.getElementById('tMap').classList.remove('on');};
+</script>
+</body>
+</html>
